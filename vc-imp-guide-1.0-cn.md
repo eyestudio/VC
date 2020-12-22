@@ -1,5 +1,7 @@
 # 可验证凭证实施指南1.0
 
+原文地址：https://w3c.github.io/vc-imp-guide/
+
 **摘要**
 
 本文件提供了可验证凭证的实施指南。
@@ -202,3 +204,243 @@ domain 可以是任何字符串或URI，而challenge 应该是一个随机生成
 }
 ```
 
+
+
+## 8. 使用 JWT aud claim
+
+JWT aud claim 指的是(即确定)可验证的展示的预期受众(即核验人)。因此，这是上述链接数据证明方法的一种替代方法。它让持有人指明它允许哪些验证者来验证可验证的演示。任何未在 aud 中标识的符合 JWT 的验证者都必须拒绝 JWT（见 RFC 7519）。
+
+RFC 7519 将 aud 定义为 "大小写敏感的字符串数组，每个数组包含一个 StringOrURI 值"。对于在可验证演示中的使用，我们强烈建议将其限制为一个单一的URI值，等于预期验证者的URI。
+
+数据模型规范没有提供指导，说明如何将这个 JWT 要求转化为可验证的呈现方式的属性，反之亦然。我们强烈建议将审计JWT要求映射到可核查演示的核查器属性。
+
+例子 4.使用 verifier 属性的目标可验证展示示例 一个使用验证器属性的可验证的目标展示示例
+
+```
+{
+  "@context": [
+    "https://www.w3.org/2018/credentials/v1",
+    "https://www.w3.org/2019/credentials/v1.1"
+  ],
+  "type": "VerifiablePresentation",
+  "verifiableCredential": [" ... "],
+  "holder": "did:example:ebfeb1f712ebc6f1c276e12ec21",
+  "verifier": "https://some.verifier.com"
+}
+```
+
+例子5。使用JWT aud claim进行有针对性的可验证展示的JWT实例。
+
+```
+{
+  "iss": "did:example:ebfeb1f712ebc6f1c276e12ec21",
+  "jti": "urn:uuid:3978344f-8596-4c3a-a978-8fcaba3903c5",
+  "aud": "https://some.verifier.com",
+  "nbf": 1541493724,
+  "iat": 1541493724,
+  "exp": 1573029723,
+  "nonce": "343s$FSFDa-",
+  "vp": {
+    "@context": [
+      "https://www.w3.org/2018/credentials/v1",
+      "https://www.w3.org/2018/credImpGuide/v1"
+    ],
+    "type": "VerifiablePresentation",
+    "verifiableCredential": [" ... "]
+  }
+}
+```
+
+
+
+## 9. 扩展
+
+本节是非规范性的。
+
+可验证凭证数据模型是围绕着一个开放世界的假设设计的，这意味着任何实体都可以对另一个实体说任何话。这种方法可以实现无许可的创新；没有集中的登记处或权威机构，扩展作者必须通过它们注册自己或他们创建的具体数据模型和词汇表。
+
+相反，凭证数据模型作者要通过使用[LINKED-DATA]来使用机器可读词汇表。本实施指南提供了如何使用一种被软件开发人员和网页作者所欢迎的名为[JSON-LD]的数据格式来表达数据模型的例子。这种数据格式提供了一些功能，使作者能够用习惯的JSON来表达他们的数据模型，同时也确保他们的词汇术语能够被明确理解，即使是没有实现JSON-LD处理的软件也能理解。
+
+可验证凭证数据模型还使用了基于图的数据模型，它允许作者对描述单个实体的一个或多个属性的简单关系和复杂的多实体关系进行建模。
+
+本节其余部分将介绍如何编写基于可验证凭证数据模型的扩展。
+
+### 9.1 创建新的证书类型
+
+我们期望对可验证凭证数据模型最常见的扩展是新的凭证类型。每当有人对一个或多个实体有话要说，并且希望他们的作者身份是可验证的，他们就应该使用可验证凭证。有时，可能有一个别人创建的现有凭证类型，可以重复使用，以做出他们想要做出的声明。然而，在某些情况下，往往需要新的凭证类型。
+
+新的凭证类型可以通过以下几个步骤来创建。本指南还将指导您创建一个新的凭证类型示例。在高层次上，要遵循的步骤是。
+
+1. 设计数据模型。
+1. 创建一个新的JSON-LD上下文。
+1. 选择一个发布位置。
+1. 在发布新凭证时使用新的JSON-LD上下文。
+
+那么，让我们来逐步创建一个新的凭证类型，我们将把它称为ExampleAddressCredential。这个凭证的目的将是表达一个人的邮政地址。
+
+#### 设计数据模型
+
+首先，我们必须为我们的新凭证类型设计一个数据模型。我们知道，我们需要能够表达邮政地址的基本内容，比如一个人的城市、州和邮编。当然，这些项目是相当以美国为中心的，所以我们应该考虑将这些术语国际化。但是在我们进一步发展之前，因为我们使用的是[LINKED-DATA]词汇表，所以很有可能一些常见的概念已经有了别人创造的词汇表，我们可以利用它。
+
+如果我们要使用别人的词汇表，我们要确保它是稳定的，不太可能发生任何重大变化。甚至可能会有一些技术，我们可以利用这些技术来存储我们可以参考的不可改变的词汇表，但这些不是这个例子的重点。在这里，我们将借助于网络上一个非常流行的词汇--schema.org的惯性。事实证明，这个词汇正是我们所需要的，它已经对邮政地址进行了建模，甚至还有如何使用JSON-LD表达的例子。
+
+请注意，schema.org的开发是渐进式的，这意味着今天的术语定义可能与未来的定义不同，甚至被删除。尽管schema.org开发者鼓励使用最新版本，如结构化数据应用中简单的非版本schema.org URL，如`http://schema.org/Place`，但在某些时候，更精确的版本是很重要的。Schema.org还提供了每个版本的日期快照，包括schema.org核心词汇的人类和机器可读定义。这些都是在发布页面上链接的。例如，你可以使用版本化的URI `https://schema.org/version/3.9/schema-all.html#term_Place`，而不是未版本化的URI `http://schema.org/Place`。此外，schemaVersion属性已经被定义，为文档提供了一种方式来表明schema.org定义的具体预期版本。
+
+使用schema.org词汇和JSON-LD，我们可以这样表达一个人的地址：
+
+例子6: 示例 schema.org 地址
+
+```
+{
+  
+  "@context": [
+    "http://schema.org"
+  ],
+  "type": "Person",
+  "address": {
+    "type": "PostalAddress",
+    "streetAddress": "123 Main St."
+    "addressLocality": "Blacksburg",
+    "addressRegion": "VA",
+    "postalCode": "24060",
+    "addressCountry": "US"
+  }
+}
+```
+
+注意上面JSON中的@context键。这个@context指的是一个机器可读文件（也用JSON表示），它提供了术语定义[JSON-LD]。术语定义将JSON中使用的一个键或类型，如地址或PostalAddress，映射到一个全球唯一的标识符：URL。
+
+这确保了当软件看到@context `http://schema.org` 时，它将以全球一致的方式解释JSON中的键和类型，而不需要开发人员在JSON中或可能遍历它的代码中使用完整的URL。只要软件知道所使用的具体的@context（或者如果它使用JSON-LD处理将其转换为其他已知的@context），那么它将理解JSON的编写背景和意图。使用@context还可以像上面的例子一样，将@type等[JSON-LD]关键字别名为更简单的类型。
+
+注意，如果我们想避免使用@context，我们也可以使用完整的URL来表达JSON。下面是我们这样做的例子：
+
+例子7: schema.org地址与完整的URL的例子。
+
+```
+{
+  "@type": "http://schema.org/Person",
+  "http://schema.org/address": {
+    "@type": "http://schema.org/PostalAddress",
+    "http://schema.org/streetAddress": "123 Main St."
+    "http://schema.org/addressLocality": "Blacksburg",
+    "http://schema.org/addressRegion": "VA",
+    "http://schema.org/postalCode": "24060",
+    "http://schema.org/addressCountry": "US"
+  }
+}
+```
+
+虽然这种形式是一种可以接受的表达信息的方式，使其毫不含糊，但许多软件开发人员更愿意使用更习惯的JSON。使用@context可以在不失去全局一致性的情况下实现习惯性的JSON，并且不需要一个集中的注册表或权威机构来创建扩展。请注意，@context也可以有一个以上的值。在这种情况下，一个JSON数组被用来表达多个值，其中每个值都会引用定义术语的另一个上下文。利用这种机制，我们可以先引入可验证凭证数据模型规范中定义的术语，然后再引入schema.org定义的术语：
+
+例子8: 带schema.org上下文的地址凭证示例。
+
+```
+{
+  
+  "@context": [
+    "https://www.w3.org/2018/credentials/v1",
+    "http://schema.org"
+  ],
+  ...
+  "credentialSubject": {
+    "type": "Person",
+    "address": {
+      "type": "PostalAddress",
+      "streetAddress": "123 Main St."
+      "addressLocality": "Blacksburg",
+      "addressRegion": "VA",
+      "postalCode": "24060",
+      "addressCountry": "US"
+    }
+  },
+  ...
+}
+```
+
+但请注意，每个上下文可能对同一术语有不同的定义，例如，JSON键地址可能在每个上下文中映射到不同的URL。默认情况下，[JSON-LD]允许@上下文中的术语使用最后一个术语胜出的顺序重新定义。虽然这些变化可以通过使用JSON-LD处理安全地处理，但我们希望降低可验证凭证消费者的负担。我们希望消费者软件只需要读取和理解与@context键相关联的字符串值，就能够对术语的含义做出假设。我们不希望他们担心术语会以意想不到的方式被重新定义。这样他们的软件就可以只检查@context的值，然后被硬编码来理解术语的含义。
+
+为了防止术语重新定义，[JSON-LD]@protected特性必须应用于@context中的术语定义。核心可验证凭证@上下文中的所有术语都已经以这种方式受到保护。唯一允许重新定义现有术语的情况是，新定义的范围是在上下文中定义的另一个新术语之下。这符合开发者的期望，并确保消费者软件对它所处理的数据的语义有很强的保证；它可以被写成永远不会对术语的定义感到困惑。请注意，消费者必须确定自己的风险状况，以确定如何处理其软件处理的任何包含其不理解的术语的凭证。
+
+#### 创建一个新的JSON-LD上下文
+
+鉴于上述情况，我们不想使用schema.org上下文的原因至少有一个：它被设计得非常灵活，因此没有使用@protected特性。不过我们想要创建自己的[JSON-LD]上下文还有几个原因。首先，schema.org上下文没有定义我们的新凭证类型。ExampleAddressCredential. 其次，它不是通过安全协议（例如，https）提供服务，而是使用http。请注意，这并不像看起来那样令人担忧，因为建议所有可验证凭证消费软件都对它所理解的@context值进行硬编码，而不是伸向Web来获取它们。最后，它是一个非常大的上下文，包含了更多的术语定义，而不是我们所需要的。
+
+所以，我们将创建我们自己的[JSON-LD]上下文，它只表达我们新的凭证类型所需要的那些术语定义。请注意，这并不意味着我们必须新建URL；我们仍然可以重用schema.org词汇。我们所做的只是创建一个更加简洁和有针对性的上下文。下面是我们在上下文中需要的东西。
+
+例子9: 地址凭证上下文示例
+
+```
+{
+  "@version": 1.1,
+  "@protected": true,
+
+  "ExampleAddressCredential":
+    "https://example.org/ExampleAddressCredential",
+
+  "Person": {
+    "@id": "http://schema.org/Person",
+    "@context": {
+      "@version": 1.1,
+      "@protected": true,
+
+      "address": "http://schema.org/address"
+    }
+  },
+  "PostalAddress": {
+    "@id": "http://schema.org/PostalAddress",
+    "@context": {
+      "@version": 1.1,
+      "@protected": true,
+
+      "streetAddress": "http://schema.org/streetAddress",
+      "addressLocality": "http://schema.org/addressLocality",
+      "addressRegion": "http://schema.org/addressRegion",
+      "postalCode": "http://schema.org/postalCode",
+      "addressCountry": "http://schema.org/addressCountry"
+    }
+  }
+}
+```
+
+上面的上下文为我们的新凭证类型ExampleAddressCredential定义了一个术语，将其映射到URL `https://example.org/ExampleAddressCredential`。我们也可以选择像urn:private-example:ExampleAddressCredential这样的URI，但如果我们愿意的话，这种方法将不允许我们提供一个网页来描述它。该上下文还定义了Person和PostalAddress类型的术语，将它们映射到它们的schema.org词汇URL上。此外，当使用这些类型时，它还通过一个范围上下文为它们中的每一个类型定义了受保护的术语，将地址和 streetAddress 等术语映射到它们的 schema.org 词汇 URL 中。关于如何编写JSON-LD上下文或作用域上下文的更多信息，请参见[JSON-LD]规范。
+
+#### 选择发布位置
+
+现在我们有了一个[JSON-LD]上下文，我们必须给它一个URL。从技术上讲，我们可以只使用URI，例如，一个私有的URN，如urn:private-example:my-extension。然而，如果我们希望人们能够在网络上阅读和发现它，我们应该给它一个URL，比如`https://example.org/example-address-credential-context/v1`。
+
+当这个URL被derefer引用时，它应该默认返回application/ld+json，以允许JSON-LD处理器处理上下文。然而，如果用户代理请求HTML，它应该返回人类可读的文本，向人类解释术语定义是什么以及它们映射到什么。由于我们正在重用一个现有的词汇，schema.org，我们也可以简单地通过他们的网站链接到我们的类型和术语的意义定义。如果我们创建了自己的新词汇，我们会在自己的网站上对它们进行描述，最好也包括机读信息。
+
+### 发出新凭证时使用新的JSON-LD上下文
+
+现在，我们已经准备好了我们的上下文，可以让任何希望发行一个ExampleAddressCredential的人使用。
+
+例子10: 使用schema.org上下文的地址凭证示例
+
+```
+{
+  
+  "@context": [
+    "https://www.w3.org/2018/credentials/v1",
+    "https://example.org/example-address-credential-context/v1"
+  ],
+  "id": "https://example.org/credentials/1234",
+  "type": "ExampleAddressCredential",
+  "issuer": "https://example.org/people#me",
+  "issuanceDate": "2017-12-05T14:27:42Z",
+  "credentialSubject": {
+    "id": "did:example:1234",
+    "type": "Person",
+    "address": {
+      "type": "PostalAddress",
+      "streetAddress": "123 Main St."
+      "addressLocality": "Blacksburg",
+      "addressRegion": "VA",
+      "postalCode": "24060",
+      "addressCountry": "US"
+    }
+  },
+  "proof": { ... }
+}
+```
+
+需要注意的是，编写这种新的凭证类型不需要任何人的许可，你必须只遵守上述参考标准。
